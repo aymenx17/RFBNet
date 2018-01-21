@@ -215,8 +215,8 @@ def train():
         # forward
         t0 = time.time()
         out = net(images)# This must be the start point for the path to the loss
-        #The size of out?
-        #What it contains?
+        #out is a tuple of three
+        #it contains conf loc and cnt with size (32,num_priors,5)
 
         # backprop
         optimizer.zero_grad()

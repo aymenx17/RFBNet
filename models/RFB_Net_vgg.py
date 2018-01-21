@@ -157,6 +157,7 @@ class RFBNet(nn.Module):
 
         self.loc = nn.ModuleList(head[0])
         self.conf = nn.ModuleList(head[1])
+        self.cnt = nn.ModuleList(head[2])
         if self.phase == 'test':
             self.softmax = nn.Softmax()
 
@@ -183,6 +184,7 @@ class RFBNet(nn.Module):
         sources = list()
         loc = list()
         conf = list()
+        cnt = list()
 
         # apply vgg up to conv4_3 relu
         for k in range(23):
@@ -201,16 +203,19 @@ class RFBNet(nn.Module):
             if k < self.indicator or k%2 ==0:
                 sources.append(x)
 
+        #Here we must add together with loc and conf also cnt
         # apply multibox head to source layers
-        for (x, l, c) in zip(sources, self.loc, self.conf):
-            loc.append(l(x).permute(0, 2, 3, 1).contiguous())
+        for (x, l, c, cn) in zip(sources, self.loc, self.conf, self.cnt):
+            loc.append(l(x).permute(0, 2, 3, 1).contiguous()) #loc[0] has size 32x38x38x24
             conf.append(c(x).permute(0, 2, 3, 1).contiguous())
+            cnt.append(cn(x).permute(0, 2, 3, 1).contiguous())
 
         #print([o.size() for o in loc])
 
-
+        # it seems in order to perform torch.cat you need contiguous propriety
         loc = torch.cat([o.view(o.size(0), -1) for o in loc], 1)
         conf = torch.cat([o.view(o.size(0), -1) for o in conf], 1)
+        cnt = torch.cat([o.view(o.size(0), -1) for o in cnt], 1)
 
         if self.phase == "test":
             output = (
@@ -221,6 +226,7 @@ class RFBNet(nn.Module):
             output = (
                 loc.view(loc.size(0), -1, 4),
                 conf.view(conf.size(0), -1, self.num_classes),
+                cnt.view(cnt.size(0), -1, 5),
             )
         return output
 
@@ -303,6 +309,7 @@ extras = {
 def multibox(size, vgg, extra_layers, cfg, num_classes):
     loc_layers = []
     conf_layers = []
+    cnt_layers = []
     vgg_source = [-2]
     for k, v in enumerate(vgg_source):
         if k == 0:
@@ -310,6 +317,8 @@ def multibox(size, vgg, extra_layers, cfg, num_classes):
                                  cfg[k] * 4, kernel_size=3, padding=1)]
             conf_layers +=[nn.Conv2d(512,
                                  cfg[k] * num_classes, kernel_size=3, padding=1)]
+            cnt_layers += [nn.Conv2d(512,
+                                 cfg[k] * 5, kernel_size=3, padding=1)]
         else:
             loc_layers += [nn.Conv2d(vgg[v].out_channels,
                                  cfg[k] * 4, kernel_size=3, padding=1)]
@@ -331,8 +340,10 @@ def multibox(size, vgg, extra_layers, cfg, num_classes):
                                  * 4, kernel_size=3, padding=1)]
             conf_layers += [nn.Conv2d(v.out_channels, cfg[i]
                                   * num_classes, kernel_size=3, padding=1)]
+            cnt_layers +=  [nn.Conv2d(v.out_channels, cfg[i]
+                                  * 5, kernel_size=3, padding=1)]
             i +=1
-    return vgg, extra_layers, (loc_layers, conf_layers)
+    return vgg, extra_layers, (loc_layers, conf_layers, cnt_layers)
 
 mbox = {
     '300': [6, 6, 6, 6, 4, 4],  # number of boxes per feature map location
@@ -347,7 +358,7 @@ def build_net(phase, size=300, num_classes=21):
     if size != 300 and size != 512:
         print("Error: Sorry only RFBNet300 and RFBNet512 are supported!")
         return
-
+    #
     return RFBNet(phase, size, *multibox(size, vgg(base[str(size)], 3),
                                 add_extras(size, extras[str(size)], 1024),
                                 mbox[str(size)], num_classes), num_classes)

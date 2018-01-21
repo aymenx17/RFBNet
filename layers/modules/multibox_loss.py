@@ -61,7 +61,7 @@ class MultiBoxLoss(nn.Module):
         # I must add inside predictions which is a tuple, a new torch tensor
         # so suppose until then, to have such tensor with size (batch_size, num_priors, max_obj_number)
 
-        loc_data, conf_data = predictions
+        loc_data, conf_data, cnt_data = predictions
         priors = priors
         num = loc_data.size(0)
         num_priors = (priors.size(0))
