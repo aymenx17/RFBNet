@@ -58,6 +58,9 @@ class MultiBoxLoss(nn.Module):
                 shape: [batch_size,num_objs,5] (last idx is the label).
         """
 
+        # I must add inside predictions which is a tuple, a new torch tensor
+        # so suppose until then, to have such tensor with size (batch_size, num_priors, max_obj_number)
+
         loc_data, conf_data = predictions
         priors = priors
         num = loc_data.size(0)
@@ -79,7 +82,7 @@ class MultiBoxLoss(nn.Module):
         loc_t = Variable(loc_t, requires_grad=False)
         conf_t = Variable(conf_t,requires_grad=False)
 
-        pos = conf_t > 0
+        pos = conf_t > 0 # è un array con funzione di maschera
 
         # Localization Loss (Smooth L1)
         # Shape: [batch,num_priors,4]

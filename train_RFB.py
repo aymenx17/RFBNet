@@ -157,6 +157,7 @@ def train():
     epoch = 0 + args.resume_epoch
     print('Loading Dataset...')
 
+    # Here below we must integrate in VOCDetection what needs to add ground truth counting
     if args.dataset == 'VOC':
         dataset = VOCDetection(VOCroot, train_sets, preproc(
             img_dim, rgb_means, p), AnnotationTransform())
@@ -194,15 +195,15 @@ def train():
                            repr(epoch) + '.pth')
             epoch += 1
 
-        load_t0 = time.time()
+        load_t0 = time.time() # How much it take to load a batch of images and process it
         if iteration in stepvalues:
             step_index += 1
         lr = adjust_learning_rate(optimizer, args.gamma, epoch, step_index, iteration, epoch_size)
 
 
         # load train data
-        images, targets = next(batch_iterator)
-        
+        images, targets = next(batch_iterator) #Here targets must include also the number of objects
+
         #print(np.sum([torch.sum(anno[:,-1] == 2) for anno in targets]))
 
         if args.cuda:
@@ -213,11 +214,17 @@ def train():
             targets = [Variable(anno, volatile=True) for anno in targets]
         # forward
         t0 = time.time()
-        out = net(images)
+        out = net(images)# This must be the start point for the path to the loss
+        #The size of out?
+        #What it contains?
+
         # backprop
         optimizer.zero_grad()
-        loss_l, loss_c = criterion(out, priors, targets)
-        loss = loss_l + loss_c
+        #The size of priors and targets?
+        #What they contains?
+        # criterion is the MultiBoxLoss function
+        loss_l, loss_c = criterion(out, priors, targets) # In this lines we must add our criterion for counting
+        loss = loss_l + loss_c  # Here we must add our nice loss value
         loss.backward()
         optimizer.step()
         t1 = time.time()
@@ -228,7 +235,7 @@ def train():
             print('Epoch:' + repr(epoch) + ' || epochiter: ' + repr(iteration % epoch_size) + '/' + repr(epoch_size)
                   + '|| Totel iter ' +
                   repr(iteration) + ' || L: %.4f C: %.4f||' % (
-                loss_l.data[0],loss_c.data[0]) + 
+                loss_l.data[0],loss_c.data[0]) +
                 'Batch time: %.4f sec. ||' % (load_t1 - load_t0) + 'LR: %.8f' % (lr))
 
     torch.save(net.state_dict(), args.save_folder +
@@ -236,12 +243,12 @@ def train():
 
 
 def adjust_learning_rate(optimizer, gamma, epoch, step_index, iteration, epoch_size):
-    """Sets the learning rate 
+    """Sets the learning rate
     # Adapted from PyTorch Imagenet example:
     # https://github.com/pytorch/examples/blob/master/imagenet/main.py
     """
     if epoch < 6:
-        lr = 1e-6 + (args.lr-1e-6) * iteration / (epoch_size * 5) 
+        lr = 1e-6 + (args.lr-1e-6) * iteration / (epoch_size * 5)
     else:
         lr = args.lr * (gamma ** (step_index))
     for param_group in optimizer.param_groups:
